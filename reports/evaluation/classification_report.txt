@@ -1,0 +1,66 @@
+ORBITGUARD Stage 5 — Model evaluation
+Evaluation data: official held-out test split only
+Test records: 529
+Class counts: {0: 416, 1: 113} (0=Normal, 1=Anomalous)
+PR-AUC is the trapezoidal area under the precision-recall curve; average precision is reported separately.
+Models are ranked by anomaly recall, then anomaly F1, then PR-AUC.
+
+=== Decision Tree ===
+Metrics: {"accuracy": 0.9489603024574669, "average_precision": 0.8008803254476758, "f1_anomaly": 0.88, "pr_auc": 0.8932498972371122, "precision_anomaly": 0.8839285714285714, "recall_anomaly": 0.8761061946902655, "roc_auc": 0.9224280973451328}
+Confusion counts: TN=403, FP=13, FN=14, TP=99
+Classification report:
+               precision    recall  f1-score   support
+
+   Normal (0)       0.97      0.97      0.97       416
+Anomalous (1)       0.88      0.88      0.88       113
+
+     accuracy                           0.95       529
+    macro avg       0.93      0.92      0.92       529
+ weighted avg       0.95      0.95      0.95       529
+False-positive segment IDs: 103, 356, 478, 682, 1184, 1338, 1422, 1475, 1620, 1734, 1735, 1788, 1906
+False-negative segment IDs: 132, 148, 256, 261, 278, 327, 452, 458, 861, 927, 1189, 1579, 1793, 1956
+
+=== Random Forest ===
+Metrics: {"accuracy": 0.9678638941398866, "average_precision": 0.9683821764231388, "f1_anomaly": 0.9209302325581395, "pr_auc": 0.9687150415692583, "precision_anomaly": 0.9705882352941176, "recall_anomaly": 0.8761061946902655, "roc_auc": 0.9886189584751532}
+Confusion counts: TN=413, FP=3, FN=14, TP=99
+Classification report:
+               precision    recall  f1-score   support
+
+   Normal (0)       0.97      0.99      0.98       416
+Anomalous (1)       0.97      0.88      0.92       113
+
+     accuracy                           0.97       529
+    macro avg       0.97      0.93      0.95       529
+ weighted avg       0.97      0.97      0.97       529
+False-positive segment IDs: 476, 478, 1734
+False-negative segment IDs: 20, 81, 132, 256, 261, 278, 326, 327, 452, 458, 564, 927, 1579, 1793
+
+=== XGBoost baseline ===
+Metrics: {"accuracy": 0.9640831758034026, "average_precision": 0.9642600362928737, "f1_anomaly": 0.9116279069767442, "pr_auc": 0.9641489562863422, "precision_anomaly": 0.9607843137254902, "recall_anomaly": 0.8672566371681416, "roc_auc": 0.9873213070115725}
+Confusion counts: TN=412, FP=4, FN=15, TP=98
+Classification report:
+               precision    recall  f1-score   support
+
+   Normal (0)       0.96      0.99      0.98       416
+Anomalous (1)       0.96      0.87      0.91       113
+
+     accuracy                           0.96       529
+    macro avg       0.96      0.93      0.94       529
+ weighted avg       0.96      0.96      0.96       529
+False-positive segment IDs: 476, 478, 1734, 1735
+False-negative segment IDs: 20, 81, 132, 256, 261, 278, 326, 327, 452, 458, 564, 927, 1579, 1793, 1956
+
+=== Tuned XGBoost ===
+Metrics: {"accuracy": 0.9584120982986768, "average_precision": 0.9694641810196307, "f1_anomaly": 0.8990825688073395, "pr_auc": 0.9693421229080789, "precision_anomaly": 0.9333333333333333, "recall_anomaly": 0.8672566371681416, "roc_auc": 0.9899591558883595}
+Confusion counts: TN=409, FP=7, FN=15, TP=98
+Classification report:
+               precision    recall  f1-score   support
+
+   Normal (0)       0.96      0.98      0.97       416
+Anomalous (1)       0.93      0.87      0.90       113
+
+     accuracy                           0.96       529
+    macro avg       0.95      0.93      0.94       529
+ weighted avg       0.96      0.96      0.96       529
+False-positive segment IDs: 30, 476, 478, 493, 1699, 1734, 1735
+False-negative segment IDs: 81, 132, 256, 261, 278, 326, 327, 452, 458, 564, 927, 1579, 1793, 2090, 2103

@@ -1,0 +1,152 @@
+{
+  "model": "Baseline XGBoost",
+  "artifact": "xgboost_baseline_model.joblib",
+  "output_explained": "P(anomaly=1)",
+  "shap_method": "TreeExplainer with interventional feature perturbation",
+  "training_background_rows": 80,
+  "test_rows_explained": 96,
+  "random_state": 42,
+  "feature_names": [
+    "duration",
+    "len",
+    "mean",
+    "var",
+    "std",
+    "kurtosis",
+    "skew",
+    "n_peaks",
+    "smooth10_n_peaks",
+    "smooth20_n_peaks",
+    "diff_peaks",
+    "diff2_peaks",
+    "diff_var",
+    "diff2_var",
+    "gaps_squared",
+    "len_weighted",
+    "var_div_duration",
+    "var_div_len"
+  ],
+  "top_features": [
+    {
+      "feature": "n_peaks",
+      "mean_absolute_shap": 0.12218607838351227,
+      "mean_signed_shap": 0.06424267162618309
+    },
+    {
+      "feature": "diff2_peaks",
+      "mean_absolute_shap": 0.08017936097305312,
+      "mean_signed_shap": 0.048813479507027364
+    },
+    {
+      "feature": "len",
+      "mean_absolute_shap": 0.07001145271880187,
+      "mean_signed_shap": 0.019495952570032265
+    },
+    {
+      "feature": "diff2_var",
+      "mean_absolute_shap": 0.05414571082406292,
+      "mean_signed_shap": 0.0334532321159555
+    },
+    {
+      "feature": "var_div_len",
+      "mean_absolute_shap": 0.05344332602555557,
+      "mean_signed_shap": 0.01975784251283796
+    }
+  ],
+  "selected_predictions": {
+    "normal": {
+      "kind": "normal",
+      "test_row_position": 0,
+      "actual_class": 0,
+      "predicted_class": 0,
+      "predicted_label": "Normal",
+      "predicted_anomaly_probability": 0.004101681988686323,
+      "base_probability": 0.19352010333025782,
+      "shap_probability_sum": -0.18941842551704174,
+      "reconstructed_anomaly_probability": 0.004101677813216076,
+      "top_contributions": [
+        {
+          "feature": "diff2_var",
+          "feature_value": 7.035422088489087e-13,
+          "shap_value": -0.0649135324660913,
+          "direction": "decreases the model's anomaly probability"
+        },
+        {
+          "feature": "diff_peaks",
+          "feature_value": 78.0,
+          "shap_value": -0.04365918451817179,
+          "direction": "decreases the model's anomaly probability"
+        },
+        {
+          "feature": "diff2_peaks",
+          "feature_value": 87.0,
+          "shap_value": -0.04217184990687037,
+          "direction": "decreases the model's anomaly probability"
+        },
+        {
+          "feature": "n_peaks",
+          "feature_value": 1.0,
+          "shap_value": -0.03190967111780519,
+          "direction": "decreases the model's anomaly probability"
+        },
+        {
+          "feature": "kurtosis",
+          "feature_value": -1.4843933372949996,
+          "shap_value": -0.02459897647036078,
+          "direction": "decreases the model's anomaly probability"
+        }
+      ],
+      "segment_id": 5
+    },
+    "anomalous": {
+      "kind": "anomalous",
+      "test_row_position": 3,
+      "actual_class": 1,
+      "predicted_class": 1,
+      "predicted_label": "Anomalous",
+      "predicted_anomaly_probability": 0.9804025888442993,
+      "base_probability": 0.19352010333025782,
+      "shap_probability_sum": 0.7868824915447652,
+      "reconstructed_anomaly_probability": 0.980402594875023,
+      "top_contributions": [
+        {
+          "feature": "diff2_peaks",
+          "feature_value": 1.0,
+          "shap_value": 0.29078964410520547,
+          "direction": "increases the model's anomaly probability"
+        },
+        {
+          "feature": "len",
+          "feature_value": 230.0,
+          "shap_value": 0.1254734866677904,
+          "direction": "increases the model's anomaly probability"
+        },
+        {
+          "feature": "diff2_var",
+          "feature_value": 1.9199652146969388e-11,
+          "shap_value": 0.08756045530324037,
+          "direction": "increases the model's anomaly probability"
+        },
+        {
+          "feature": "kurtosis",
+          "feature_value": -0.812622692797941,
+          "shap_value": 0.06852110101946736,
+          "direction": "increases the model's anomaly probability"
+        },
+        {
+          "feature": "var_div_len",
+          "feature_value": 2.646349169278087e-12,
+          "shap_value": 0.06267913177016143,
+          "direction": "increases the model's anomaly probability"
+        }
+      ],
+      "segment_id": 13
+    }
+  },
+  "interpretation": {
+    "positive_shap": "raises the model's predicted probability of anomaly",
+    "negative_shap": "lowers the model's predicted probability of anomaly",
+    "limitation": "SHAP describes this model's behavior, not physical causation or proof of a satellite fault."
+  },
+  "additivity_max_absolute_error": 1.0480951367908276e-07
+}

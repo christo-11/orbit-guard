@@ -1,0 +1,499 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    :root {
+      color-scheme: dark;
+      font-family: Inter, "Segoe UI", sans-serif;
+      background: transparent;
+      color: #e8f4ff;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; overflow: hidden; background: transparent; }
+    .globe-shell {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      min-height: 380px;
+      overflow: hidden;
+      isolation: isolate;
+      border-radius: 24px;
+      background:
+        radial-gradient(ellipse at 50% 49%, rgba(12, 49, 83, .4), transparent 47%),
+        radial-gradient(ellipse at 50% 100%, rgba(5, 8, 17, .12), transparent 65%);
+    }
+    canvas { display: block; width: 100%; height: 100%; touch-action: none; }
+    .globe-topline {
+      position: absolute;
+      z-index: 2;
+      top: 17px;
+      left: 20px;
+      color: rgba(179, 204, 229, .64);
+      font: 10px/1.5 "Segoe UI", sans-serif;
+      letter-spacing: .16em;
+      text-transform: uppercase;
+      pointer-events: none;
+    }
+    .globe-controls {
+      position: absolute;
+      z-index: 2;
+      right: 18px;
+      bottom: 17px;
+      display: flex;
+      gap: 7px;
+    }
+    .globe-controls button {
+      padding: 8px 11px;
+      border: 1px solid rgba(147, 191, 226, .2);
+      border-radius: 999px;
+      color: #c8d8e8;
+      background: rgba(7, 16, 29, .7);
+      font: 11px "Segoe UI", sans-serif;
+      cursor: pointer;
+      backdrop-filter: blur(12px);
+      transition: border-color .2s ease, color .2s ease, transform .2s ease;
+    }
+    .globe-controls button:hover {
+      color: #fff;
+      border-color: rgba(0, 240, 255, .6);
+      transform: translateY(-1px);
+    }
+    .globe-status {
+      position: absolute;
+      z-index: 2;
+      bottom: 23px;
+      left: 20px;
+      color: rgba(152, 177, 201, .56);
+      font: 9px "Segoe UI", sans-serif;
+      letter-spacing: .1em;
+      text-transform: uppercase;
+      pointer-events: none;
+    }
+    .globe-loading {
+      position: absolute;
+      inset: 0;
+      display: grid;
+      place-items: center;
+      color: #7c9ab7;
+      font-size: 11px;
+      letter-spacing: .16em;
+      text-transform: uppercase;
+      transition: opacity .4s ease;
+      pointer-events: none;
+    }
+    .globe-loading::before {
+      width: 6px;
+      height: 6px;
+      margin-right: 9px;
+      border-radius: 50%;
+      background: #00f0ff;
+      box-shadow: 0 0 16px #00f0ff;
+      content: "";
+      animation: beacon 1.4s ease-in-out infinite;
+    }
+    .globe-loading { display: flex; justify-content: center; align-items: center; }
+    .globe-loading[hidden] { display: none; }
+    @keyframes beacon { 50% { opacity: .35; transform: scale(.7); } }
+    @media (max-width: 600px) {
+      .globe-shell { min-height: 330px; border-radius: 16px; }
+      .globe-topline { top: 12px; left: 12px; font-size: 8px; }
+      .globe-status { bottom: 14px; left: 12px; max-width: 45%; font-size: 8px; }
+      .globe-controls { right: 9px; bottom: 9px; gap: 4px; }
+      .globe-controls button { padding: 7px 8px; font-size: 10px; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }
+    }
+  </style>
+</head>
+<body>
+  <main class="globe-shell" aria-label="Interactive illustrative 3D Earth visualization">
+    <div class="globe-topline">ORBITAL VIEW &nbsp; / &nbsp; VISUALIZATION</div>
+    <div id="loading" class="globe-loading" role="status">Initializing globe</div>
+    <canvas id="globe" aria-label="Illustrative dotted Earth with animated satellite orbits"></canvas>
+    <div class="globe-status">Illustrative only · not live or georeferenced telemetry</div>
+    <nav class="globe-controls" aria-label="Globe controls">
+      <button id="rotation" type="button" aria-pressed="false">Pause rotation</button>
+      <button id="reset" type="button">Reset view</button>
+    </nav>
+  </main>
+  <script>
+    (() => {
+      let canvas = document.getElementById("globe");
+      const loading = document.getElementById("loading");
+      const rotationButton = document.getElementById("rotation");
+      const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
+      let rotating = !reducedMotion.matches;
+      let renderer;
+      let camera;
+      let earth;
+      let orbitRoot;
+      let scene;
+      let frame = 0;
+      let drag = null;
+      let fallbackAngle = 0;
+      let fallbackScale = 1;
+
+      function finishLoading() {
+        loading.hidden = true;
+      }
+
+      function setRotationState() {
+        rotationButton.textContent = rotating ? "Pause rotation" : "Resume rotation";
+        rotationButton.setAttribute("aria-pressed", String(!rotating));
+      }
+
+      function fallback() {
+        if (!canvas.getContext("2d")) {
+          const replacement = canvas.cloneNode(true);
+          canvas.replaceWith(replacement);
+          canvas = replacement;
+        }
+        const ctx = canvas.getContext("2d");
+        if (!ctx) {
+          loading.textContent = "Interactive globe unavailable";
+          return;
+        }
+        canvas.addEventListener("pointerdown", (event) => {
+          drag = { x: event.clientX, y: event.clientY };
+          canvas.setPointerCapture(event.pointerId);
+        });
+        canvas.addEventListener("pointermove", (event) => {
+          if (!drag) return;
+          fallbackAngle += (event.clientX - drag.x) * .009;
+          drag = { x: event.clientX, y: event.clientY };
+        });
+        canvas.addEventListener("pointerup", () => { drag = null; });
+        canvas.addEventListener("pointercancel", () => { drag = null; });
+        canvas.addEventListener("wheel", (event) => {
+          event.preventDefault();
+          fallbackScale = Math.max(.75, Math.min(1.35, fallbackScale - event.deltaY * .001));
+        }, { passive: false });
+        const points = [];
+        const count = 950;
+        for (let index = 0; index < count; index += 1) {
+          const y = 1 - (index / (count - 1)) * 2;
+          const radius = Math.sqrt(1 - y * y);
+          const angle = Math.PI * (3 - Math.sqrt(5)) * index;
+          points.push([Math.cos(angle) * radius, y, Math.sin(angle) * radius]);
+        }
+        function drawFallback() {
+          const width = canvas.clientWidth;
+          const height = canvas.clientHeight;
+          const ratio = Math.min(window.devicePixelRatio || 1, 1.5);
+          canvas.width = Math.round(width * ratio);
+          canvas.height = Math.round(height * ratio);
+          ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+          ctx.clearRect(0, 0, width, height);
+          const size = Math.min(width * .32, height * .38) * fallbackScale;
+          const cx = width / 2;
+          const cy = height / 2;
+          const planet = ctx.createRadialGradient(
+            cx - size * .38,
+            cy - size * .42,
+            size * .04,
+            cx,
+            cy,
+            size * 1.1,
+          );
+          planet.addColorStop(0, "rgba(25, 117, 165, .62)");
+          planet.addColorStop(.58, "rgba(8, 41, 70, .5)");
+          planet.addColorStop(1, "rgba(3, 10, 25, .16)");
+          ctx.fillStyle = planet;
+          ctx.beginPath();
+          ctx.arc(cx, cy, size, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.save();
+          ctx.beginPath();
+          ctx.arc(cx, cy, size, 0, Math.PI * 2);
+          ctx.clip();
+          ctx.strokeStyle = "rgba(103, 207, 255, .09)";
+          ctx.lineWidth = 1;
+          for (const latitude of [-.55, 0, .55]) {
+            ctx.beginPath();
+            ctx.ellipse(cx, cy + latitude * size, size, size * .16, 0, 0, Math.PI * 2);
+            ctx.stroke();
+          }
+          ctx.beginPath();
+          ctx.ellipse(cx, cy, size * .48, size, 0, 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.restore();
+          ctx.strokeStyle = "rgba(90, 202, 255, .22)";
+          ctx.beginPath();
+          ctx.arc(cx, cy, size, 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.strokeStyle = "rgba(45, 154, 224, .17)";
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.ellipse(cx, cy, size * 1.42, size * .5, -.18, 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.beginPath();
+          ctx.ellipse(cx, cy, size * 1.2, size * .38, .31, 0, Math.PI * 2);
+          ctx.stroke();
+          for (const point of points) {
+            const x = point[0] * Math.cos(fallbackAngle) + point[2] * Math.sin(fallbackAngle);
+            const z = point[2] * Math.cos(fallbackAngle) - point[0] * Math.sin(fallbackAngle);
+            if (z < -.12) continue;
+            const px = cx + x * size;
+            const py = cy + point[1] * size;
+            const alpha = .2 + z * .68;
+            ctx.fillStyle = `rgba(${Math.round(30 + z * 40)}, ${Math.round(156 + z * 75)}, 255, ${alpha})`;
+            ctx.beginPath();
+            ctx.arc(px, py, 1 + z * 1.05, 0, Math.PI * 2);
+            ctx.fill();
+          }
+          const pulse = reducedMotion.matches ? 0 : Math.sin(Date.now() / 360) * 2;
+          for (const [phase, orbit, color] of [
+            [fallbackAngle * 1.4 + .65, 1.42, "#b9fbff"],
+            [-fallbackAngle * 1.1 + 2.4, 1.2, "#c4b5fd"],
+          ]) {
+            const theta = phase;
+            const orbitX = Math.cos(theta) * size * orbit;
+            const orbitY = Math.sin(theta) * size * orbit * .38;
+            const markerX = cx + orbitX * Math.cos(.31) - orbitY * Math.sin(.31);
+            const markerY = cy + orbitX * Math.sin(.31) + orbitY * Math.cos(.31);
+            ctx.fillStyle = color === "#b9fbff"
+              ? "rgba(0, 240, 255, .18)"
+              : "rgba(167, 139, 250, .16)";
+            ctx.beginPath();
+            ctx.arc(markerX, markerY, 7 + pulse, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = color;
+            ctx.beginPath();
+            ctx.arc(markerX, markerY, 2.3, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.strokeStyle = `${color}99`;
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(markerX - 5, markerY);
+            ctx.lineTo(markerX + 5, markerY);
+            ctx.stroke();
+          }
+          if (rotating) fallbackAngle += .0018;
+          frame = requestAnimationFrame(drawFallback);
+        }
+        finishLoading();
+        drawFallback();
+      }
+
+      function makeThreeGlobe(THREE) {
+        try {
+          scene = new THREE.Scene();
+          camera = new THREE.PerspectiveCamera(36, 1, .1, 100);
+          camera.position.z = 4.65;
+          renderer = new THREE.WebGLRenderer({
+            canvas,
+            alpha: true,
+            antialias: true,
+            powerPreference: "low-power"
+          });
+          renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
+          renderer.setClearColor(0x000000, 0);
+
+          const root = new THREE.Group();
+          orbitRoot = root;
+          scene.add(root);
+          earth = new THREE.Group();
+          root.add(earth);
+
+          const vertices = [];
+          const colors = [];
+          const count = 3900;
+          const goldenAngle = Math.PI * (3 - Math.sqrt(5));
+          const color = new THREE.Color();
+          for (let index = 0; index < count; index += 1) {
+            const y = 1 - (index / (count - 1)) * 2;
+            const radius = Math.sqrt(1 - y * y);
+            const theta = goldenAngle * index;
+            const x = Math.cos(theta) * radius;
+            const z = Math.sin(theta) * radius;
+            vertices.push(x, y, z);
+            const glow = .48 + .42 * (z * .5 + .5);
+            color.setRGB(.06 * glow, .57 * glow, .92 * glow);
+            colors.push(color.r, color.g, color.b);
+          }
+          const pointGeometry = new THREE.BufferGeometry();
+          pointGeometry.setAttribute("position", new THREE.Float32BufferAttribute(vertices, 3));
+          pointGeometry.setAttribute("color", new THREE.Float32BufferAttribute(colors, 3));
+          const pointMaterial = new THREE.PointsMaterial({
+            size: .013,
+            sizeAttenuation: true,
+            vertexColors: true,
+            transparent: true,
+            opacity: .88,
+            depthWrite: false,
+            blending: THREE.AdditiveBlending
+          });
+          earth.add(new THREE.Points(pointGeometry, pointMaterial));
+
+          const globeLine = new THREE.Mesh(
+            new THREE.SphereGeometry(.996, 48, 36),
+            new THREE.MeshBasicMaterial({
+              color: 0x128cc9,
+              wireframe: true,
+              transparent: true,
+              opacity: .045
+            })
+          );
+          earth.add(globeLine);
+
+          const orbitMaterial = new THREE.LineBasicMaterial({
+            color: 0x168fd2,
+            transparent: true,
+            opacity: .24
+          });
+          const makeOrbit = (tilt, rotation, scale) => {
+            const curve = new THREE.EllipseCurve(0, 0, 1.37, .46, 0, Math.PI * 2, false, 0);
+            const points = curve.getPoints(180).map((point) =>
+              new THREE.Vector3(point.x * scale, point.y * scale, 0)
+            );
+            const geometry = new THREE.BufferGeometry().setFromPoints(points);
+            const orbit = new THREE.LineLoop(geometry, orbitMaterial);
+            orbit.rotation.set(tilt, rotation, .22);
+            root.add(orbit);
+          };
+          makeOrbit(.94, .36, 1);
+          makeOrbit(1.18, -.62, .84);
+          makeOrbit(.55, 1.03, .76);
+
+          const markerMaterial = new THREE.MeshBasicMaterial({
+            color: 0x00f0ff,
+            transparent: true,
+            opacity: .95
+          });
+          const markerHalos = [];
+          const markerPositions = [[.2, .48, .85], [-.72, .24, .65], [.58, -.32, .72]];
+          for (const coordinates of markerPositions) {
+            const direction = new THREE.Vector3(...coordinates).normalize();
+            const marker = new THREE.Mesh(new THREE.SphereGeometry(.023, 12, 12), markerMaterial);
+            marker.position.copy(direction);
+            earth.add(marker);
+            const halo = new THREE.Mesh(
+              new THREE.SphereGeometry(.045, 12, 12),
+              new THREE.MeshBasicMaterial({ color: 0x00f0ff, transparent: true, opacity: .13 })
+            );
+            halo.position.copy(direction);
+            earth.add(halo);
+            markerHalos.push(halo);
+          }
+
+          const starPositions = [];
+          for (let index = 0; index < 220; index += 1) {
+            starPositions.push(
+              (Math.random() - .5) * 13,
+              (Math.random() - .5) * 8,
+              -1 - Math.random() * 7
+            );
+          }
+          const starGeometry = new THREE.BufferGeometry();
+          starGeometry.setAttribute("position", new THREE.Float32BufferAttribute(starPositions, 3));
+          scene.add(new THREE.Points(
+            starGeometry,
+            new THREE.PointsMaterial({
+              color: 0x9acfff,
+              size: .012,
+              transparent: true,
+              opacity: .32,
+              depthWrite: false
+            })
+          ));
+
+          function resize() {
+            const width = Math.max(canvas.clientWidth, 1);
+            const height = Math.max(canvas.clientHeight, 1);
+            renderer.setSize(width, height, false);
+            camera.aspect = width / height;
+            camera.updateProjectionMatrix();
+          }
+          const observer = new ResizeObserver(resize);
+          observer.observe(canvas.parentElement);
+          resize();
+
+          canvas.addEventListener("pointerdown", (event) => {
+            drag = { x: event.clientX, y: event.clientY };
+            canvas.setPointerCapture(event.pointerId);
+          });
+          canvas.addEventListener("pointermove", (event) => {
+            if (!drag) return;
+            earth.rotation.y += (event.clientX - drag.x) * .006;
+            earth.rotation.x = Math.max(-.8, Math.min(.8, earth.rotation.x + (event.clientY - drag.y) * .004));
+            drag = { x: event.clientX, y: event.clientY };
+          });
+          canvas.addEventListener("pointerup", () => { drag = null; });
+          canvas.addEventListener("pointercancel", () => { drag = null; });
+          canvas.addEventListener("wheel", (event) => {
+            event.preventDefault();
+            camera.position.z = Math.max(3.2, Math.min(7, camera.position.z + event.deltaY * .002));
+          }, { passive: false });
+
+          function animate() {
+            frame = requestAnimationFrame(animate);
+            if (rotating) {
+              earth.rotation.y += .0017;
+              root.rotation.y += .0002;
+            }
+            if (!reducedMotion.matches) {
+              const pulse = .5 + .5 * Math.sin(performance.now() * .003);
+              for (const halo of markerHalos) {
+                halo.scale.setScalar(1 + pulse * .32);
+                halo.material.opacity = .07 + pulse * .11;
+              }
+            }
+            renderer.render(scene, camera);
+          }
+          finishLoading();
+          animate();
+          return true;
+        } catch (error) {
+          console.warn("Three.js globe initialization failed; using canvas fallback.", error);
+          if (renderer) renderer.dispose();
+          return false;
+        }
+      }
+
+      function loadThree(sources, index) {
+        if (index >= sources.length) {
+          fallback();
+          return;
+        }
+        const script = document.createElement("script");
+        script.src = sources[index];
+        script.onload = () => {
+          if (!window.THREE || !makeThreeGlobe(window.THREE)) {
+            script.remove();
+            loadThree(sources, index + 1);
+          }
+        };
+        script.onerror = () => {
+          script.remove();
+          loadThree(sources, index + 1);
+        };
+        document.head.appendChild(script);
+      }
+
+      rotationButton.addEventListener("click", () => {
+        rotating = !rotating;
+        setRotationState();
+      });
+      document.getElementById("reset").addEventListener("click", () => {
+        if (earth) {
+          earth.rotation.set(0, 0, 0);
+          orbitRoot.rotation.set(0, 0, 0);
+          camera.position.z = 4.65;
+        } else {
+          fallbackAngle = 0;
+          fallbackScale = 1;
+        }
+      });
+      reducedMotion.addEventListener("change", (event) => {
+        rotating = !event.matches;
+        setRotationState();
+      });
+      setRotationState();
+      fallback();
+    })();
+  </script>
+</body>
+</html>
